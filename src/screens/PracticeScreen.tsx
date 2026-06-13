@@ -1,34 +1,46 @@
 import { useMemo, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import CharacterQuiz from "../quiz/CharacterQuiz";
-import type { CharResult, Word } from "../types";
-
-interface Props {
-  words: Word[];
-}
+import { getAllCards } from "../db/cards";
+import type { CharResult } from "../types";
 
 /**
- * Cycles through words: shows meaning + pinyin, the user writes each
- * character of the word in turn, then sees a summary and moves on.
+ * Free practice: cycles through all saved words (no scheduling yet — the
+ * spaced-repetition review flow arrives in the next milestone). Shows
+ * meaning + pinyin, the user writes each character, then a summary.
  */
-export default function PracticeScreen({ words }: Props) {
+export default function PracticeScreen() {
+  const cards = useLiveQuery(() => getAllCards(), []);
   const [wordIndex, setWordIndex] = useState(0);
   const [charIndex, setCharIndex] = useState(0);
   const [results, setResults] = useState<CharResult[]>([]);
-
-  const word = words[wordIndex % words.length];
-  const chars = useMemo(() => Array.from(word.hanzi), [word]);
-  const wordDone = results.length === chars.length;
 
   const boxSize = useMemo(
     () => Math.min(Math.floor(window.innerWidth) - 40, 360),
     []
   );
 
+  if (cards === undefined) {
+    return <div className="screen">Loading…</div>;
+  }
+  if (cards.length === 0) {
+    return (
+      <div className="screen practice-screen">
+        <p className="hint-text">
+          No words yet. Add some on the <strong>Add</strong> tab, then come back
+          to practise writing them.
+        </p>
+      </div>
+    );
+  }
+
+  const word = cards[wordIndex % cards.length];
+  const chars = Array.from(word.hanzi);
+  const wordDone = results.length === chars.length;
+
   const handleResult = (result: CharResult) => {
     setResults((prev) => [...prev, result]);
-    if (charIndex + 1 < chars.length) {
-      setCharIndex(charIndex + 1);
-    }
+    if (charIndex + 1 < chars.length) setCharIndex(charIndex + 1);
   };
 
   const nextWord = () => {
@@ -69,7 +81,7 @@ export default function PracticeScreen({ words }: Props) {
 
       {!wordDone ? (
         <CharacterQuiz
-          key={`${wordIndex}-${charIndex}`}
+          key={`${word.id}-${charIndex}`}
           char={chars[charIndex]}
           size={boxSize}
           onResult={handleResult}

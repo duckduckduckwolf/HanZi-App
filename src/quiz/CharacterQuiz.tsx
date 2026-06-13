@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import HanziWriter from "hanzi-writer";
 import type { CharResult } from "../types";
+import { charDataLoader } from "./charData";
 
 interface Props {
   char: string;
@@ -45,6 +46,7 @@ export default function CharacterQuiz({ char, size, onResult }: Props) {
       highlightColor: "#69b1ff",
       outlineColor: "#d4d2cc",
       strokeColor: "#1a1a1a",
+      charDataLoader,
       onLoadCharDataSuccess: () => setStatus("active"),
       onLoadCharDataError: () => setStatus("error"),
     });
