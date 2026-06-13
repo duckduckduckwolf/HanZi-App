@@ -8,13 +8,21 @@ conventions, and workflows so a new session can be productive immediately.
 A personal Progressive Web App for practising handwriting of **simplified**
 Chinese characters (Skritter-style stroke quizzes) with **Anki-style FSRS**
 spaced repetition. Installed to an iPhone home screen. **All data is on-device**
-(IndexedDB) — no account, no server, no analytics. Built for one user (Mona),
+(IndexedDB) — no account, no server, no analytics. Built for a single owner
 who is new to programming: explain changes in plain language and check in on
 product decisions before building them.
 
 Live: https://duckduckduckwolf.github.io/HanZi-App/
 Repo: https://github.com/duckduckduckwolf/HanZi-App
 Original v1 plan & rationale: `docs/original-plan.md`
+
+## Privacy — this is a PUBLIC repo
+
+The GitHub repo is public. Do **not** put personal information (the owner's real
+name, email address, location, etc.) into tracked files, commit messages, or the
+commit author field. Commits are authored as `duckduckduckwolf` with a GitHub
+no-reply email — keep that identity. If the owner shares personal details in
+chat, keep them out of anything that gets committed or pushed.
 
 ## Stack
 
