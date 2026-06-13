@@ -1,0 +1,9 @@
+# Normalize line endings to LF in the repo; let Git handle the working copy.
+* text=auto eol=lf
+
+# Treat these as binary (never convert line endings).
+*.png binary
+*.gz binary
+*.ico binary
+*.woff binary
+*.woff2 binary
