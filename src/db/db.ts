@@ -49,6 +49,8 @@ export interface ReviewLog {
   revealed: boolean;
   /** Interval (days) the scheduler assigned after this review. */
   scheduledDays: number;
+  /** True if this was the card's first-ever review (a new-card introduction). */
+  wasNew: boolean;
 }
 
 /** Cached hanzi-writer stroke data so reviews work offline. */

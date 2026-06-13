@@ -329,6 +329,128 @@ button.primary {
   gap: 16px;
 }
 
+/* ---- Today screen ---- */
+
+.today-card {
+  background: #fff;
+  border: 1px solid #e2dfd8;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.today-counts {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.count-num {
+  font-size: 40px;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.count-label {
+  font-size: 17px;
+  color: #4b4740;
+}
+
+.study-btn {
+  margin-top: 12px;
+  font-size: 19px;
+  padding: 14px 28px;
+  width: 100%;
+}
+
+.all-done {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* ---- Review session ---- */
+
+.review-session {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.session-progress {
+  font-size: 15px;
+  color: #8a857c;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new-badge {
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.grading-phase {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.grade-bar {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.grade-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 4px;
+  border-radius: 12px;
+}
+
+.grade-btn.suggested {
+  border-color: #2563eb;
+  border-width: 2px;
+  background: #eff6ff;
+}
+
+.grade-label {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.grade-interval {
+  font-size: 13px;
+  color: #6b675f;
+}
+
+.exit-link {
+  border: none;
+  background: transparent;
+  color: #8a857c;
+  font-size: 15px;
+  margin-top: 8px;
+}
+
+.session-done {
+  text-align: center;
+}
+
 /* ---- Word summary ---- */
 
 .word-summary {
