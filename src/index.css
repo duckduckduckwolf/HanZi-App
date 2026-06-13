@@ -15,6 +15,18 @@ body {
   height: 100%;
   /* Prevent iOS rubber-band scrolling fighting with stroke drawing */
   overscroll-behavior: none;
+  /* No long-press callout / text selection while writing with a finger */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Allow selection/typing where it matters (adding & editing words). */
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 #root {
