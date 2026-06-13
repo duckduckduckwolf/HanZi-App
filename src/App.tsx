@@ -2,13 +2,15 @@ import { useState } from "react";
 import TodayScreen from "./screens/TodayScreen";
 import AddWordsScreen from "./screens/AddWordsScreen";
 import WordListScreen from "./screens/WordListScreen";
+import SettingsScreen from "./screens/SettingsScreen";
 
-type Tab = "today" | "add" | "words";
+type Tab = "today" | "add" | "words" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "today", label: "Today" },
   { id: "add", label: "Add" },
   { id: "words", label: "Words" },
+  { id: "settings", label: "Settings" },
 ];
 
 export default function App() {
@@ -20,6 +22,7 @@ export default function App() {
         {tab === "today" && <TodayScreen />}
         {tab === "add" && <AddWordsScreen />}
         {tab === "words" && <WordListScreen />}
+        {tab === "settings" && <SettingsScreen />}
       </main>
       <nav className="tab-bar">
         {TABS.map((t) => (
