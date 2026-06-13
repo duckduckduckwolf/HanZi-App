@@ -325,6 +325,26 @@ button.primary {
   inset: 0;
 }
 
+/* Spring "pop" when a correct stroke lands. */
+@keyframes hw-stroke-pop {
+  0% {
+    transform: scale(1.35);
+  }
+  45% {
+    transform: scale(0.92);
+  }
+  72% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.hw-stroke-pop {
+  animation: hw-stroke-pop 320ms ease-out;
+}
+
 .drawing-overlay {
   position: absolute;
   inset: 0;

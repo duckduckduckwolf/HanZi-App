@@ -9,6 +9,38 @@ interface Props {
   onResult: (result: CharResult) => void;
 }
 
+/** Colour of the real character strokes; also used to find them in the SVG. */
+const STROKE_COLOR = "#1a1a1a";
+const STROKE_RGBA = "rgba(26,26,26,1)";
+
+/**
+ * Give the just-completed stroke a quick spring "pop" so landing a correct
+ * stroke feels satisfying (Skritter-style) rather than a flat fade-in.
+ * hanzi-writer renders each stroke as a clipped <path>; scaling it about its
+ * own centre carries the clip along, so the effect is clean.
+ */
+function popStroke(container: HTMLElement, strokeNum: number) {
+  const svg = container.querySelector("svg");
+  if (!svg) return;
+  const groups = svg.querySelectorAll<SVGGElement>(":scope > g > g");
+  let main: SVGGElement | null = null;
+  groups.forEach((g) => {
+    const first = g.children[0] as SVGElement | undefined;
+    if (first && first.getAttribute("stroke") === STROKE_RGBA) main = g;
+  });
+  if (!main) return;
+  const path = (main as SVGGElement).children[strokeNum] as
+    | SVGPathElement
+    | undefined;
+  if (!path) return;
+  path.style.transformBox = "fill-box";
+  path.style.transformOrigin = "center";
+  path.classList.remove("hw-stroke-pop");
+  // Force reflow so re-adding the class restarts the animation each stroke.
+  void path.getBoundingClientRect();
+  path.classList.add("hw-stroke-pop");
+}
+
 /**
  * One character's writing quiz: the user draws strokes with finger/mouse,
  * hanzi-writer grades each stroke. Reports mistakes/hint/reveal upward
@@ -41,11 +73,16 @@ export default function CharacterQuiz({ char, size, onResult }: Props) {
       showOutline: false,
       showHintAfterMisses: 3,
       highlightOnComplete: true,
+      // More forgiving stroke matching — favours memorising the character over
+      // perfect penmanship, while still rejecting clearly wrong strokes.
+      leniency: 1.5,
+      // Quick fade so the spring-pop (added in onCorrectStroke) is what you notice.
+      strokeFadeDuration: 120,
       drawingWidth: Math.max(10, Math.round(size * 0.05)),
       drawingColor: "#1a1a1a",
       highlightColor: "#69b1ff",
       outlineColor: "#d4d2cc",
-      strokeColor: "#1a1a1a",
+      strokeColor: STROKE_COLOR,
       charDataLoader,
       onLoadCharDataSuccess: () => setStatus("active"),
       onLoadCharDataError: () => setStatus("error"),
@@ -60,6 +97,9 @@ export default function CharacterQuiz({ char, size, onResult }: Props) {
     writer.quiz({
       onMistake: () => {
         mistakesRef.current += 1;
+      },
+      onCorrectStroke: (strokeData) => {
+        popStroke(container, strokeData.strokeNum);
       },
       onComplete: () => {
         if (doneRef.current) return;
