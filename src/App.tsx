@@ -1,8 +1,13 @@
+import PracticeScreen from "./screens/PracticeScreen";
+import { SAMPLE_WORDS } from "./data/sampleWords";
+
 export default function App() {
   return (
     <div className="app">
-      <h1>汉字 HanZi</h1>
-      <p>Project skeleton is running.</p>
+      <header className="app-header">
+        <h1>汉字</h1>
+      </header>
+      <PracticeScreen words={SAMPLE_WORDS} />
     </div>
   );
 }
