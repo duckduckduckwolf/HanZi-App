@@ -14,6 +14,7 @@ product decisions before building them.
 
 Live: https://duckduckduckwolf.github.io/HanZi-App/
 Repo: https://github.com/duckduckduckwolf/HanZi-App
+Original v1 plan & rationale: `docs/original-plan.md`
 
 ## Stack
 
