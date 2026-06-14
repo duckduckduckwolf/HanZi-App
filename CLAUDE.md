@@ -14,7 +14,6 @@ product decisions before building them.
 
 Live: https://duckduckduckwolf.github.io/HanZi-App/
 Repo: https://github.com/duckduckduckwolf/HanZi-App
-Original v1 plan & rationale: `docs/original-plan.md`
 
 ## Privacy — this is a PUBLIC repo
 
@@ -42,6 +41,7 @@ npm run dev          # dev server (also launched via .claude/launch.json preview
 npm test             # run all tests
 npm run build        # type-check + production build into dist/
 npm run build:dict   # regenerate public/cedict.tsv (needs tmp/cedict.txt.gz — see scripts/build-dict.mjs)
+npm run build:kmandarin  # regenerate public/kmandarin.tsv (preferred reading per heteronym; uses pinyin-pro, build-time only)
 ```
 
 Note (this machine): if `npm`/`node` aren't found in a shell, prepend
@@ -61,7 +61,9 @@ src/
     cards.ts               add/list/update/delete cards (+ dedup)
     backup.ts              export/import full data as JSON
   dict/
-    cedict.ts              load + parse public/cedict.tsv, word lookup
+    cedict.ts              load + parse public/cedict.tsv (+ kmandarin.tsv);
+                           word lookup, default-reading scoring, meaning
+                           cleanup, and full word-detail builder
   quiz/
     CharacterQuiz.tsx      hanzi-writer wrapper: one character, grading, pop animation
     charData.ts            stroke data: CDN fetch + IndexedDB cache (offline)
@@ -75,8 +77,9 @@ src/
     GradeBar.tsx           Again/Hard/Good/Easy with interval previews + suggestion
   screens/
     TodayScreen.tsx        due/new counts + Study button
-    AddWordsScreen.tsx     paste -> lookup -> edit -> save
-    WordListScreen.tsx     live list, inline edit, delete
+    AddWordsScreen.tsx     paste -> lookup -> edit (pick reading) -> save
+    WordListScreen.tsx     live list, inline edit, delete; tap a row for detail
+    WordDetailModal.tsx    bottom-sheet: card info + full cleaned dictionary entry
     SettingsScreen.tsx     FSRS settings + backup export/import
 tests/                     Vitest specs (cedict, cards, scheduler, backup)
 scripts/build-dict.mjs     one-off: CC-CEDICT download -> public/cedict.tsv
@@ -90,6 +93,26 @@ scripts/build-dict.mjs     one-off: CC-CEDICT download -> public/cedict.tsv
   new scheduling logic this way; cover it in `tests/scheduler.test.ts`.
 - **A card = one word** (single or multi-character). The quiz walks each character;
   results aggregate into one grade for the word.
+- **Meaning cleanup** (`cedict.ts`): CC-CEDICT glosses are noisy, so `cleanSenses`
+  strips `[pinyin]` refs, `CL:` classifiers, pronunciation/spelling-variant notes
+  (`(Taiwan pr. …)`, `(also written …)`), and cross-reference glosses (`variant of`,
+  `surname`, `see…`). Helpful parenthetical context is **kept** (`(slang)`,
+  `(of a bucktooth)`, `(lit. and fig.)`). `pickBestEntry` skips entries left with
+  no real meaning. New cards auto-fill the first 5 senses (`cleanMeaning`); the
+  **word detail** sheet (`getWordDetail`) shows *all* readings/senses, uncapped,
+  plus a per-character breakdown. Cleanup is lookup-time only — existing cards keep
+  their saved text (the detail sheet shows the correct meaning if it's stale).
+  Covered in `tests/cedict.test.ts`.
+- **Default reading selection** (`cedict.ts`): CC-CEDICT lists a headword's
+  entries in no useful order, so `scoreEntry`/`rankEntries` pick the *default*
+  reading for a new card. Signals: proper-noun/surname penalty, number of clean
+  senses, neutral-tone syllable, classifier presence, and a strong boost for the
+  character's customary reading from `public/kmandarin.tsv` (built once by
+  `npm run build:kmandarin` via pinyin-pro; build-time only, not in the app
+  bundle; precached for offline; loaded with `loadKMandarin`, missing file is
+  non-fatal). The Add screen offers the other readings in a per-word dropdown
+  (`alternativeEntries`, best-first) so the user can switch (e.g. 几 → `jǐ` not
+  `jī`, 东西 → `dōng xi` not "east and west"). Covered in `tests/cedict.test.ts`.
 - **Grade suggestion**: 0 stroke mistakes → Good; 1..(againMinMistakes-1) → Hard;
   ≥ againMinMistakes, or any hint/reveal → Again. Easy is never auto-suggested.
 - **Daily caps**: new cards and *review-state* cards are capped per day (reset at

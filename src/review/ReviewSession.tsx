@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Grade } from "ts-fsrs";
 import CharacterQuiz from "../quiz/CharacterQuiz";
 import GradeBar from "./GradeBar";
+import WordDetailModal from "../screens/WordDetailModal";
 import { db } from "../db/db";
 import { buildQueue, gradeCard, type QueueItem } from "../scheduler/queue";
 import type { Settings } from "../scheduler/settings";
@@ -22,6 +23,7 @@ export default function ReviewSession({ settings, onExit }: Props) {
   const [charIndex, setCharIndex] = useState(0);
   const [results, setResults] = useState<CharResult[]>([]);
   const [phase, setPhase] = useState<"writing" | "grading">("writing");
+  const [showDetail, setShowDetail] = useState(false);
   const [graded, setGraded] = useState(0);
   // Frozen timestamp for the current card so previews/grading agree.
   const [cardNow, setCardNow] = useState(() => now());
@@ -79,6 +81,7 @@ export default function ReviewSession({ settings, onExit }: Props) {
     setCharIndex(0);
     setResults([]);
     setPhase("writing");
+    setShowDetail(false);
     setCardNow(now());
   };
 
@@ -123,6 +126,13 @@ export default function ReviewSession({ settings, onExit }: Props) {
       ) : (
         <div className="grading-phase">
           <div className="summary-hanzi">{item.card.hanzi}</div>
+          <button
+            className="info-btn"
+            onClick={() => setShowDetail(true)}
+            data-testid="word-detail-btn"
+          >
+            ⓘ Details
+          </button>
           <GradeBar
             card={item.card}
             results={results}
@@ -136,6 +146,14 @@ export default function ReviewSession({ settings, onExit }: Props) {
       <button className="exit-link" onClick={onExit} data-testid="session-quit">
         End session
       </button>
+
+      {showDetail && (
+        <WordDetailModal
+          hanzi={item.card.hanzi}
+          card={item.card}
+          onClose={() => setShowDetail(false)}
+        />
+      )}
     </div>
   );
 }

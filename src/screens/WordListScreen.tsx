@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { getAllCards, updateCard, deleteCard } from "../db/cards";
 import type { Card } from "../db/db";
+import WordDetailModal from "./WordDetailModal";
 
 export default function WordListScreen() {
   const cards = useLiveQuery(() => getAllCards(), []) ?? [];
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [detailCard, setDetailCard] = useState<Card | null>(null);
 
   return (
     <div className="screen list-screen">
@@ -23,11 +25,17 @@ export default function WordListScreen() {
               />
             ) : (
               <li className="word-row" key={card.id} data-testid="word-row">
-                <span className="word-hanzi">{card.hanzi}</span>
-                <span className="word-info">
-                  <span className="word-pinyin">{card.pinyin}</span>
-                  <span className="word-meaning">{card.meaning}</span>
-                </span>
+                <button
+                  className="word-main"
+                  onClick={() => setDetailCard(card)}
+                  aria-label={`details for ${card.hanzi}`}
+                >
+                  <span className="word-hanzi">{card.hanzi}</span>
+                  <span className="word-info">
+                    <span className="word-pinyin">{card.pinyin}</span>
+                    <span className="word-meaning">{card.meaning}</span>
+                  </span>
+                </button>
                 <span className="word-actions">
                   <button onClick={() => setEditingId(card.id!)} aria-label={`edit ${card.hanzi}`}>
                     Edit
@@ -45,6 +53,14 @@ export default function WordListScreen() {
             )
           )}
         </ul>
+      )}
+
+      {detailCard && (
+        <WordDetailModal
+          hanzi={detailCard.hanzi}
+          card={detailCard}
+          onClose={() => setDetailCard(null)}
+        />
       )}
     </div>
   );

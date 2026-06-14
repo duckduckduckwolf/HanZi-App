@@ -13,13 +13,43 @@ interface Props {
 const STROKE_COLOR = "#1a1a1a";
 const STROKE_RGBA = "rgba(26,26,26,1)";
 
+/** Average of a list of points (the rough "centre" of where the user drew). */
+function centroid(points: { x: number; y: number }[]): { x: number; y: number } {
+  const sum = points.reduce(
+    (acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }),
+    { x: 0, y: 0 }
+  );
+  return { x: sum.x / points.length, y: sum.y / points.length };
+}
+
+/** How far (in character-grid units) the slide-in may travel, so a wildly
+ * placed stroke nudges in tastefully instead of flying across the box. The
+ * character grid is ~1024 units wide, so this is about a tenth of the box. */
+const MAX_SLIDE = 110;
+
+/** Start the slide partway between where the user drew and the destination,
+ * rather than all the way out at the drawn spot — keeps the directional cue
+ * but makes the stroke travel a shorter distance. */
+const SLIDE_FRACTION = 0.5;
+
 /**
- * Give the just-completed stroke a quick spring "pop" so landing a correct
- * stroke feels satisfying (Skritter-style) rather than a flat fade-in.
- * hanzi-writer renders each stroke as a clipped <path>; scaling it about its
- * own centre carries the clip along, so the effect is clean.
+ * Slide the just-completed stroke into place from the direction the user drew
+ * it (Skritter-style): if they wrote it too high, it drops down into the right
+ * spot; too far left, it slides in from the left, etc. A small overshoot gives
+ * it a springy "bounce".
+ *
+ * hanzi-writer renders each stroke as a clipped <path>; translating it carries
+ * the clip along, so the effect stays clean. The drawn points and the stroke's
+ * own geometry are both in the character-grid coordinate space (that's the space
+ * hanzi-writer grades in), so we can measure the offset there directly — no
+ * screen-pixel conversion needed. The translate is applied in that same space
+ * and the enclosing group scales it to screen for us.
  */
-function popStroke(container: HTMLElement, strokeNum: number) {
+function popStroke(
+  container: HTMLElement,
+  strokeNum: number,
+  drawnPoints: { x: number; y: number }[]
+) {
   const svg = container.querySelector("svg");
   if (!svg) return;
   const groups = svg.querySelectorAll<SVGGElement>(":scope > g > g");
@@ -33,8 +63,32 @@ function popStroke(container: HTMLElement, strokeNum: number) {
     | SVGPathElement
     | undefined;
   if (!path) return;
+
+  // Direction to slide from = where the user drew minus where the stroke lives.
+  let dx = 0;
+  let dy = 0;
+  if (drawnPoints.length > 0) {
+    const drawn = centroid(drawnPoints);
+    const box = path.getBBox();
+    const strokeCenterX = box.x + box.width / 2;
+    const strokeCenterY = box.y + box.height / 2;
+    dx = (drawn.x - strokeCenterX) * SLIDE_FRACTION;
+    dy = (drawn.y - strokeCenterY) * SLIDE_FRACTION;
+    // Clamp the travel distance while keeping the direction.
+    const dist = Math.hypot(dx, dy);
+    if (dist > MAX_SLIDE) {
+      const scale = MAX_SLIDE / dist;
+      dx *= scale;
+      dy *= scale;
+    }
+  }
+
+  // For an SVG element, 1px in a CSS transform equals one user unit in the
+  // path's local (character-grid) space, so px is the right unit here.
   path.style.transformBox = "fill-box";
   path.style.transformOrigin = "center";
+  path.style.setProperty("--pop-dx", `${dx.toFixed(1)}px`);
+  path.style.setProperty("--pop-dy", `${dy.toFixed(1)}px`);
   path.classList.remove("hw-stroke-pop");
   // Force reflow so re-adding the class restarts the animation each stroke.
   void path.getBoundingClientRect();
@@ -53,6 +107,8 @@ export default function CharacterQuiz({ char, size, onResult }: Props) {
   const mistakesRef = useRef(0);
   const usedHintRef = useRef(false);
   const doneRef = useRef(false);
+  // Index of the stroke the user still has to draw, so "Hint" can flash it.
+  const nextStrokeRef = useRef(0);
   const [status, setStatus] = useState<"loading" | "active" | "error">(
     "loading"
   );
@@ -64,6 +120,7 @@ export default function CharacterQuiz({ char, size, onResult }: Props) {
     mistakesRef.current = 0;
     usedHintRef.current = false;
     doneRef.current = false;
+    nextStrokeRef.current = 0;
 
     const writer = HanziWriter.create(container, char, {
       width: size,
@@ -75,7 +132,7 @@ export default function CharacterQuiz({ char, size, onResult }: Props) {
       highlightOnComplete: true,
       // More forgiving stroke matching — favours memorising the character over
       // perfect penmanship, while still rejecting clearly wrong strokes.
-      leniency: 1.5,
+      leniency: 1.2,
       // Quick fade so the spring-pop (added in onCorrectStroke) is what you notice.
       strokeFadeDuration: 120,
       drawingWidth: Math.max(10, Math.round(size * 0.05)),
@@ -99,7 +156,12 @@ export default function CharacterQuiz({ char, size, onResult }: Props) {
         mistakesRef.current += 1;
       },
       onCorrectStroke: (strokeData) => {
-        popStroke(container, strokeData.strokeNum);
+        nextStrokeRef.current = strokeData.strokeNum + 1;
+        popStroke(
+          container,
+          strokeData.strokeNum,
+          strokeData.drawnPath.points
+        );
       },
       onComplete: () => {
         if (doneRef.current) return;
@@ -125,14 +187,23 @@ export default function CharacterQuiz({ char, size, onResult }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [char, size]);
 
+  // "Show": briefly flash the whole character outline — fade it in, then
+  // immediately fade it back out (no hold in between).
+  const handleShow = () => {
+    const writer = writerRef.current;
+    if (!writer || doneRef.current) return;
+    usedHintRef.current = true;
+    writer.showOutline({ duration: 400 }).then(() => {
+      if (!doneRef.current) writer.hideOutline({ duration: 400 });
+    });
+  };
+
+  // "Hint": flash just the next stroke the user needs to draw.
   const handleHint = () => {
     const writer = writerRef.current;
     if (!writer || doneRef.current) return;
     usedHintRef.current = true;
-    writer.showOutline();
-    setTimeout(() => {
-      if (!doneRef.current) writer.hideOutline();
-    }, 2000);
+    writer.highlightStroke(nextStrokeRef.current);
   };
 
   const handleReveal = () => {
@@ -169,6 +240,9 @@ export default function CharacterQuiz({ char, size, onResult }: Props) {
       <div className="quiz-actions">
         <button onClick={handleHint} data-testid="hint-btn">
           Hint
+        </button>
+        <button onClick={handleShow} data-testid="show-btn">
+          Show
         </button>
         <button onClick={handleReveal} data-testid="reveal-btn">
           Reveal

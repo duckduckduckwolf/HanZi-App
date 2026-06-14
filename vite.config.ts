@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["cedict.tsv", "icons/apple-touch-icon.png"],
+      includeAssets: ["cedict.tsv", "kmandarin.tsv", "icons/apple-touch-icon.png"],
       workbox: {
         // The dictionary file is large; allow it to be precached.
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,

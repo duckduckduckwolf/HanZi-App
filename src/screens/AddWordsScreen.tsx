@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { loadDict, lookupWord } from "../dict/cedict";
+import { loadDict, loadKMandarin, lookupWord, alternativeEntries } from "../dict/cedict";
 import { addCards } from "../db/cards";
 import { cacheWordStrokes } from "../quiz/charData";
 
@@ -8,6 +8,7 @@ interface Draft {
   pinyin: string;
   meaning: string;
   found: boolean;
+  alternatives: { pinyin: string; meaning: string }[];
 }
 
 /** Split pasted text into individual words (Chinese has no internal spaces). */
@@ -32,14 +33,15 @@ export default function AddWordsScreen() {
     }
     setBusy(true);
     try {
-      const dict = await loadDict();
+      const [dict, kmandarin] = await Promise.all([loadDict(), loadKMandarin()]);
       const next: Draft[] = words.map((hanzi) => {
-        const entry = lookupWord(dict, hanzi);
+        const entry = lookupWord(dict, hanzi, kmandarin);
         return {
           hanzi,
           pinyin: entry?.pinyin ?? "",
           meaning: entry?.meaning ?? "",
           found: !!entry,
+          alternatives: alternativeEntries(dict, hanzi, kmandarin),
         };
       });
       setDrafts(next);
@@ -138,6 +140,31 @@ export default function AddWordsScreen() {
                   placeholder="meaning"
                   aria-label={`meaning for ${d.hanzi}`}
                 />
+                {d.alternatives.length > 1 && (
+                  <select
+                    className="draft-alt-select"
+                    aria-label={`other meaning for ${d.hanzi}`}
+                    value=""
+                    onChange={(e) => {
+                      const alt = d.alternatives[Number(e.target.value)];
+                      if (!alt) return;
+                      setDrafts((prev) =>
+                        prev.map((dr, j) =>
+                          j === i ? { ...dr, pinyin: alt.pinyin, meaning: alt.meaning } : dr
+                        )
+                      );
+                    }}
+                  >
+                    <option value="" disabled>
+                      Use a different meaning…
+                    </option>
+                    {d.alternatives.map((alt, k) => (
+                      <option key={k} value={k}>
+                        {alt.pinyin} — {alt.meaning}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <button className="draft-remove" onClick={() => removeDraft(i)} aria-label={`remove ${d.hanzi}`}>
                 ✕
