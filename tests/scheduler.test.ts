@@ -6,6 +6,7 @@ import {
   applyGrade,
   suggestRating,
   formatInterval,
+  dueStatus,
   Rating,
   State,
 } from "../src/scheduler/fsrs";
@@ -23,7 +24,7 @@ function settings(overrides: Partial<Settings> = {}): Settings {
   return { ...DEFAULT_SETTINGS, ...overrides };
 }
 
-async function addNewCard(hanzi: string, createdAt = T0): Promise<Card> {
+async function addNewCard(hanzi: string, createdAt = T0, deckId = 1): Promise<Card> {
   const id = await db.cards.add({
     hanzi,
     pinyin: "",
@@ -33,6 +34,7 @@ async function addNewCard(hanzi: string, createdAt = T0): Promise<Card> {
     due: createdAt,
     introduced: false,
     suspended: false,
+    deckId,
   });
   return (await db.cards.get(id))!;
 }
@@ -59,6 +61,58 @@ describe("formatInterval", () => {
     expect(formatInterval(T0, T0 + 10 * 60000)).toBe("10m");
     expect(formatInterval(T0, T0 + 3 * DAY)).toBe("3d");
     expect(formatInterval(T0, T0 + 60 * DAY)).toBe("2mo");
+  });
+});
+
+describe("dueStatus", () => {
+  function card(overrides: Partial<Card>): Card {
+    return {
+      hanzi: "x",
+      pinyin: "",
+      meaning: "",
+      createdAt: T0,
+      fsrs: null,
+      due: T0,
+      introduced: false,
+      suspended: false,
+      deckId: 1,
+      ...overrides,
+    };
+  }
+
+  it("labels a never-studied card 'New'", () => {
+    expect(dueStatus(card({ introduced: false }), T0)).toEqual({
+      label: "New",
+      kind: "new",
+    });
+  });
+
+  it("labels a card due now or in the past 'Due now'", () => {
+    expect(dueStatus(card({ introduced: true, due: T0 - DAY }), T0)).toEqual({
+      label: "Due now",
+      kind: "due",
+    });
+  });
+
+  it("colours a card due within a week orange ('week')", () => {
+    expect(dueStatus(card({ introduced: true, due: T0 + 3 * DAY }), T0)).toEqual({
+      label: "Due in 3d",
+      kind: "week",
+    });
+  });
+
+  it("colours a card due within a month yellow ('month')", () => {
+    expect(dueStatus(card({ introduced: true, due: T0 + 10 * DAY }), T0)).toEqual({
+      label: "Due in 10d",
+      kind: "month",
+    });
+  });
+
+  it("colours a card due beyond a month muted grey ('far')", () => {
+    expect(dueStatus(card({ introduced: true, due: T0 + 60 * DAY }), T0)).toEqual({
+      label: "Due in 2mo",
+      kind: "far",
+    });
   });
 });
 
@@ -123,6 +177,20 @@ describe("buildQueue caps", () => {
     await gradeCard(card, Rating.Good, [], settings({ newPerDay: 1 }), T0 + 60000);
     const q = await buildQueue(settings({ newPerDay: 1 }), T0 + 2 * 60000);
     expect(q.newCount).toBe(0); // cap of 1 already used today
+  });
+
+  it("restricts the queue to the included decks", async () => {
+    await addNewCard("甲", T0 + 1, 1);
+    await addNewCard("乙", T0 + 2, 2);
+
+    const all = await buildQueue(settings(), T0 + DAY);
+    expect(all.items).toHaveLength(2);
+
+    const deck1 = await buildQueue(settings(), T0 + DAY, { includeDeckIds: [1] });
+    expect(deck1.items.map((it) => it.card.hanzi)).toEqual(["甲"]);
+
+    const none = await buildQueue(settings(), T0 + DAY, { includeDeckIds: [] });
+    expect(none.items).toHaveLength(0);
   });
 });
 

@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { loadDict, loadKMandarin, lookupWord, alternativeEntries } from "../dict/cedict";
 import { addCards } from "../db/cards";
+import { listDecks } from "../db/decks";
+import { DEFAULT_DECK_NAME } from "../db/db";
 import { cacheWordStrokes } from "../quiz/charData";
 
 interface Draft {
@@ -9,6 +12,7 @@ interface Draft {
   meaning: string;
   found: boolean;
   alternatives: { pinyin: string; meaning: string }[];
+  deckId: number;
 }
 
 /** Split pasted text into individual words (Chinese has no internal spaces). */
@@ -23,6 +27,13 @@ export default function AddWordsScreen() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+
+  const decks = useLiveQuery(() => listDecks(), []) ?? [];
+  const defaultDeckId =
+    decks.find((d) => d.name === DEFAULT_DECK_NAME)?.id ?? decks[0]?.id ?? 0;
+  // Deck applied to every word; new words inherit it. null until decks load.
+  const [bulkDeckId, setBulkDeckId] = useState<number | null>(null);
+  const effectiveDeckId = bulkDeckId ?? defaultDeckId;
 
   const handleLookup = async () => {
     setStatus(null);
@@ -42,6 +53,7 @@ export default function AddWordsScreen() {
           meaning: entry?.meaning ?? "",
           found: !!entry,
           alternatives: alternativeEntries(dict, hanzi, kmandarin),
+          deckId: effectiveDeckId,
         };
       });
       setDrafts(next);
@@ -52,10 +64,20 @@ export default function AddWordsScreen() {
     }
   };
 
-  const updateDraft = (i: number, field: keyof Draft, value: string) => {
+  const updateDraft = (i: number, field: "pinyin" | "meaning", value: string) => {
     setDrafts((prev) =>
       prev.map((d, j) => (j === i ? { ...d, [field]: value } : d))
     );
+  };
+
+  const setDraftDeck = (i: number, deckId: number) => {
+    setDrafts((prev) => prev.map((d, j) => (j === i ? { ...d, deckId } : d)));
+  };
+
+  /** Bulk control: apply one deck to every word being added. */
+  const setBulkDeck = (deckId: number) => {
+    setBulkDeckId(deckId);
+    setDrafts((prev) => prev.map((d) => ({ ...d, deckId })));
   };
 
   const removeDraft = (i: number) => {
@@ -69,7 +91,12 @@ export default function AddWordsScreen() {
     setStatus("Saving and downloading stroke data…");
     try {
       const { added, skipped } = await addCards(
-        valid.map((d) => ({ hanzi: d.hanzi, pinyin: d.pinyin, meaning: d.meaning }))
+        valid.map((d) => ({
+          hanzi: d.hanzi,
+          pinyin: d.pinyin,
+          meaning: d.meaning,
+          deckId: d.deckId || undefined,
+        }))
       );
       // Cache stroke data so these words can be reviewed offline.
       const failures: string[] = [];
@@ -83,7 +110,8 @@ export default function AddWordsScreen() {
         })
       );
       let msg = `Added ${added} word${added === 1 ? "" : "s"}.`;
-      if (skipped.length) msg += ` Skipped ${skipped.length} already in your list.`;
+      if (skipped.length)
+        msg += ` Skipped ${skipped.length} already in that deck with the same reading.`;
       if (failures.length)
         msg += ` Couldn't fetch strokes for: ${failures.join(", ")} (no handwriting data).`;
       setStatus(msg);
@@ -165,12 +193,41 @@ export default function AddWordsScreen() {
                     ))}
                   </select>
                 )}
+                {decks.length > 1 && (
+                  <select
+                    className="draft-alt-select draft-deck-select"
+                    aria-label={`deck for ${d.hanzi}`}
+                    value={d.deckId || effectiveDeckId}
+                    onChange={(e) => setDraftDeck(i, Number(e.target.value))}
+                  >
+                    {decks.map((dk) => (
+                      <option key={dk.id} value={dk.id}>
+                        Deck: {dk.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <button className="draft-remove" onClick={() => removeDraft(i)} aria-label={`remove ${d.hanzi}`}>
                 ✕
               </button>
             </div>
           ))}
+          <div className="bulk-deck-row">
+            <label htmlFor="bulk-deck">Add all to deck</label>
+            <select
+              id="bulk-deck"
+              value={effectiveDeckId}
+              onChange={(e) => setBulkDeck(Number(e.target.value))}
+              data-testid="bulk-deck-select"
+            >
+              {decks.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             className="primary save-btn"
             onClick={handleSave}

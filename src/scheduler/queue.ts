@@ -43,6 +43,15 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+/** Optional knobs for building the queue. */
+export interface BuildQueueOptions {
+  /**
+   * Restrict the queue to these deck ids. `undefined`/`null` studies all decks
+   * (the default); an empty array studies nothing.
+   */
+  includeDeckIds?: number[] | null;
+}
+
 /**
  * Build today's study queue from the database, honouring the daily new-card
  * and review caps. Learning/relearning cards that are due are never capped
@@ -50,10 +59,15 @@ function shuffle<T>(arr: T[]): T[] {
  */
 export async function buildQueue(
   settings: Settings,
-  now: number = Date.now()
+  now: number = Date.now(),
+  opts: BuildQueueOptions = {}
 ): Promise<Queue> {
   const dayStart = startOfDay(now);
-  const allCards = await db.cards.toArray();
+  let allCards = await db.cards.toArray();
+  if (opts.includeDeckIds != null) {
+    const include = new Set(opts.includeDeckIds);
+    allCards = allCards.filter((c) => include.has(c.deckId));
+  }
   const active = allCards.filter((c) => !c.suspended);
 
   const logsToday = await db.reviewLogs

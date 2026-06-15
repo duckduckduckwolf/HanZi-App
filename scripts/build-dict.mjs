@@ -2,7 +2,9 @@
 // tab-separated file the app loads at runtime. Run with `npm run build:dict`.
 //
 // Output: public/cedict.tsv  — one line per dictionary entry:
-//   <simplified>\t<pinyin with tone marks>\t<meaning; meaning; ...>
+//   <simplified>\t<pinyin with tone marks>\t<meaning; meaning; ...>[\t<traditional>]
+// The 4th <traditional> column is written only when it differs from the
+// simplified headword (most entries are identical), so it's usually absent.
 //
 // CC-CEDICT is CC BY-SA 4.0 (https://www.mdbg.net/chinese/dictionary?page=cedict).
 
@@ -72,6 +74,7 @@ for (const line of lines) {
   // Format: Traditional Simplified [pin1 yin1] /def1/def2/
   const m = line.match(/^(\S+)\s+(\S+)\s+\[([^\]]*)\]\s+\/(.*)\/\s*$/);
   if (!m) continue;
+  const traditional = m[1];
   const simplified = m[2];
   const pinyin = convertPinyin(m[3]);
   const defs = m[4]
@@ -80,7 +83,12 @@ for (const line of lines) {
     .filter(Boolean)
     .join("; ");
   if (!defs) continue;
-  out.push(`${simplified}\t${pinyin}\t${defs}`);
+  // Append the traditional headword as an optional 4th column, but only when it
+  // differs from the simplified form — most entries are identical, so this keeps
+  // the file small and makes "is there a traditional form?" a presence check.
+  const tradCol =
+    traditional && traditional !== simplified ? `\t${traditional}` : "";
+  out.push(`${simplified}\t${pinyin}\t${defs}${tradCol}`);
   count++;
 }
 

@@ -18,6 +18,15 @@ export interface Card {
   /** True once the card has left the "new" pool. */
   introduced: boolean;
   suspended: boolean;
+  /** Which deck this word belongs to (see the `decks` table). */
+  deckId: number;
+}
+
+/** A named collection of words. Every card belongs to exactly one deck. */
+export interface Deck {
+  id?: number;
+  name: string;
+  createdAt: number;
 }
 
 /** Mirrors the fields ts-fsrs needs to resume scheduling a card. */
@@ -65,11 +74,15 @@ export interface KV {
   value: unknown;
 }
 
+/** Name of the built-in fallback deck (protected: can't be renamed/deleted). */
+export const DEFAULT_DECK_NAME = "Default";
+
 export class HanziDB extends Dexie {
   cards!: Table<Card, number>;
   reviewLogs!: Table<ReviewLog, number>;
   charData!: Table<CharData, string>;
   kv!: Table<KV, string>;
+  decks!: Table<Deck, number>;
 
   constructor(name = "hanzi-app") {
     super(name);
@@ -79,6 +92,28 @@ export class HanziDB extends Dexie {
       charData: "char",
       kv: "key",
     });
+    // v2 adds decks: every word now belongs to a deck. Existing words move into
+    // a new "Default" deck so nothing is lost on upgrade.
+    this.version(2)
+      .stores({
+        cards: "++id, hanzi, createdAt, due, introduced, suspended, deckId",
+        reviewLogs: "++id, cardId, reviewedAt",
+        charData: "char",
+        kv: "key",
+        decks: "++id, name, createdAt",
+      })
+      .upgrade(async (tx) => {
+        const now = Date.now();
+        const defaultId = (await tx
+          .table("decks")
+          .add({ name: DEFAULT_DECK_NAME, createdAt: now })) as number;
+        await tx
+          .table("cards")
+          .toCollection()
+          .modify((card: Card) => {
+            card.deckId = defaultId;
+          });
+      });
   }
 }
 

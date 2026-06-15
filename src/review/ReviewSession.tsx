@@ -14,11 +14,16 @@ const REQUEUE_MS = 20 * 60 * 1000;
 
 interface Props {
   settings: Settings;
+  /** Restrict the session to these decks; omit/undefined = all decks. */
+  includeDeckIds?: number[];
   onExit: () => void;
 }
 
-export default function ReviewSession({ settings, onExit }: Props) {
+export default function ReviewSession({ settings, includeDeckIds, onExit }: Props) {
   const [items, setItems] = useState<QueueItem[] | null>(null);
+  // Freeze the deck filter at session start so a parent re-render (e.g. toggling
+  // a deck chip) can't rebuild the queue mid-session.
+  const [deckFilter] = useState(includeDeckIds);
   const [pos, setPos] = useState(0);
   const [charIndex, setCharIndex] = useState(0);
   const [results, setResults] = useState<CharResult[]>([]);
@@ -34,8 +39,10 @@ export default function ReviewSession({ settings, onExit }: Props) {
   );
 
   useEffect(() => {
-    buildQueue(settings, now()).then((q) => setItems(q.items));
-  }, [settings]);
+    buildQueue(settings, now(), { includeDeckIds: deckFilter }).then((q) =>
+      setItems(q.items)
+    );
+  }, [settings, deckFilter]);
 
   if (items === null) return <div className="screen">Loading…</div>;
 

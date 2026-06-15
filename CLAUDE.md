@@ -52,14 +52,15 @@ wasn't refreshed. The preview launch config already handles this.
 
 ```
 src/
-  App.tsx                  Tab shell (Today / Add / Words / Settings)
-  main.tsx, index.css      Entry + all styles (single stylesheet)
+  App.tsx                  Tab shell (Today / Add / Decks / Settings)
+  main.tsx, index.css      Entry (runs initDecks) + all styles (single stylesheet)
   types.ts                 Word, CharResult
   devClock.ts              now(); dev-only time-travel (window.__timeTravel(days))
   db/
-    db.ts                  Dexie schema: cards, reviewLogs, charData, kv
-    cards.ts               add/list/update/delete cards (+ dedup)
-    backup.ts              export/import full data as JSON
+    db.ts                  Dexie schema: cards (have deckId), reviewLogs, charData, kv, decks
+    cards.ts               add/list/update/delete/move cards (+ deck-scoped dedup)
+    decks.ts               decks CRUD, Default deck, initDecks, study toggles
+    backup.ts              export/import full data as JSON (v2: includes decks)
   dict/
     cedict.ts              load + parse public/cedict.tsv (+ kmandarin.tsv);
                            word lookup, default-reading scoring, meaning
@@ -76,12 +77,13 @@ src/
     ReviewSession.tsx      study flow: quiz -> grade bar -> next; re-queues learning cards
     GradeBar.tsx           Again/Hard/Good/Easy with interval previews + suggestion
   screens/
-    TodayScreen.tsx        due/new counts + Study button
-    AddWordsScreen.tsx     paste -> lookup -> edit (pick reading) -> save
-    WordListScreen.tsx     live list, inline edit, delete; tap a row for detail
+    TodayScreen.tsx        due/new counts + Study button + per-deck study toggles
+    AddWordsScreen.tsx     paste -> lookup -> edit (pick reading + deck) -> save
+    DecksScreen.tsx        deck list (counts, create/rename/delete) -> open a deck
+    WordListScreen.tsx     one deck's words: sort (added/due) + status badge, inline edit, delete, move (single/multi), detail
     WordDetailModal.tsx    bottom-sheet: card info + full cleaned dictionary entry
     SettingsScreen.tsx     FSRS settings + backup export/import
-tests/                     Vitest specs (cedict, cards, scheduler, backup)
+tests/                     Vitest specs (cedict, cards, decks, scheduler, backup)
 scripts/build-dict.mjs     one-off: CC-CEDICT download -> public/cedict.tsv
 .github/workflows/deploy.yml  build + deploy to GitHub Pages on push to main
 ```
@@ -93,16 +95,40 @@ scripts/build-dict.mjs     one-off: CC-CEDICT download -> public/cedict.tsv
   new scheduling logic this way; cover it in `tests/scheduler.test.ts`.
 - **A card = one word** (single or multi-character). The quiz walks each character;
   results aggregate into one grade for the word.
-- **Meaning cleanup** (`cedict.ts`): CC-CEDICT glosses are noisy, so `cleanSenses`
-  strips `[pinyin]` refs, `CL:` classifiers, pronunciation/spelling-variant notes
-  (`(Taiwan pr. …)`, `(also written …)`), and cross-reference glosses (`variant of`,
-  `surname`, `see…`). Helpful parenthetical context is **kept** (`(slang)`,
-  `(of a bucktooth)`, `(lit. and fig.)`). `pickBestEntry` skips entries left with
-  no real meaning. New cards auto-fill the first 5 senses (`cleanMeaning`); the
-  **word detail** sheet (`getWordDetail`) shows *all* readings/senses, uncapped,
-  plus a per-character breakdown. Cleanup is lookup-time only — existing cards keep
-  their saved text (the detail sheet shows the correct meaning if it's stale).
-  Covered in `tests/cedict.test.ts`.
+- **Decks** (`db/decks.ts`): every card has a `deckId`. A protected built-in
+  **"Default"** deck is the fallback (can't be renamed/deleted); `ensureDefaultDeck`
+  creates it lazily (transaction-guarded) and `initDecks` (run from `main.tsx` and
+  after a backup import) adopts any deck-less cards. The Dexie **v2** upgrade moves
+  existing on-device words into Default. **Dedup is deck-scoped by character +
+  reading** (`deckId|hanzi|pinyin` in `cards.ts`), so 长 *cháng* and 长 *zhǎng*
+  coexist, and the same word can live in two decks. Deleting a deck deletes its
+  words and their review logs (`deleteDeck`, behind a `confirm`). The Add screen
+  picks a deck per word + a bulk "add all to deck"; the Decks tab manages decks and
+  moves words (per-row or tick-box multi-select). Covered in `tests/decks.test.ts`.
+- **Study is global but deck-filterable.** `buildQueue` takes
+  `{ includeDeckIds }` (omit = all decks). The Today screen shows per-deck toggle
+  chips (when >1 deck); the *excluded* deck ids persist in `kv`
+  (`loadStudyExclusions`/`saveStudyExclusions`). `ReviewSession` freezes the filter
+  at session start so toggling mid-session can't rebuild the queue.
+- **Meaning cleanup** (`cedict.ts`): CC-CEDICT glosses are noisy, so `cleanGloss`
+  tidies each gloss for a handwriting (recall) card. It **turns character
+  cross-references into pinyin** — `您[nin2]` → `nín`, `會水|会水[hui4 shui3]` →
+  `huì shuǐ` (via `numberedToToneMarks`) — so the answer character (or a related
+  one) can't leak into its own meaning. It strips `CL:` classifiers (standalone
+  **and** parenthetical `(CL:…)`), the `(bound form)` grammar label,
+  pronunciation/spelling-variant notes (`(Taiwan pr. …)`, `(also written …)`), and
+  cross-reference glosses (`variant of`, `surname`, `see…`). Helpful parenthetical
+  context is **kept** (`(slang)`, `(of a bucktooth)`, `(literary)`,
+  `(lit. and fig.)`) — **including meanings written wholly in parentheses**, which
+  is how CC-CEDICT writes particle senses (了 *le* "(completed action marker)",
+  吗 *ma* "(question particle…)"); dropping those used to delete the everyday
+  reading entirely. `pickBestEntry` skips entries left with no real meaning. New
+  cards auto-fill the first 5 senses (`cleanMeaning`); the **word detail** sheet
+  (`getWordDetail`) shows *all* readings/senses, uncapped, plus a per-character
+  breakdown, plus each reading's **traditional** form when it differs from the
+  simplified (an optional 4th column in `cedict.tsv`). Cleanup is lookup-time
+  only — existing cards keep their saved text (the detail sheet shows the correct
+  meaning if it's stale). Covered in `tests/cedict.test.ts`.
 - **Default reading selection** (`cedict.ts`): CC-CEDICT lists a headword's
   entries in no useful order, so `scoreEntry`/`rankEntries` pick the *default*
   reading for a new card. Signals: proper-noun/surname penalty, number of clean
@@ -110,9 +136,12 @@ scripts/build-dict.mjs     one-off: CC-CEDICT download -> public/cedict.tsv
   character's customary reading from `public/kmandarin.tsv` (built once by
   `npm run build:kmandarin` via pinyin-pro; build-time only, not in the app
   bundle; precached for offline; loaded with `loadKMandarin`, missing file is
-  non-fatal). The Add screen offers the other readings in a per-word dropdown
-  (`alternativeEntries`, best-first) so the user can switch (e.g. 几 → `jǐ` not
-  `jī`, 东西 → `dōng xi` not "east and west"). Covered in `tests/cedict.test.ts`.
+  non-fatal). A small `PARTICLE_READINGS` override outranks even kmandarin for the
+  few grammatical particles whose generated reading is the rare one (了 → `le` not
+  `liǎo`, 啦 → `la` not `lā`). The Add screen offers the other readings in a
+  per-word dropdown (`alternativeEntries`, best-first) so the user can switch
+  (e.g. 几 → `jǐ` not `jī`, 东西 → `dōng xi` not "east and west"). Covered in
+  `tests/cedict.test.ts`.
 - **Grade suggestion**: 0 stroke mistakes → Good; 1..(againMinMistakes-1) → Hard;
   ≥ againMinMistakes, or any hint/reveal → Again. Easy is never auto-suggested.
 - **Daily caps**: new cards and *review-state* cards are capped per day (reset at

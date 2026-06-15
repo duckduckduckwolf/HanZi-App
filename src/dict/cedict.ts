@@ -2,6 +2,8 @@ export interface DictEntry {
   hanzi: string;
   pinyin: string;
   meaning: string;
+  /** Traditional headword, present only when it differs from the simplified `hanzi`. */
+  traditional?: string;
 }
 
 let dictPromise: Promise<Map<string, DictEntry[]>> | null = null;
@@ -14,10 +16,16 @@ export function parseCedict(text: string): Map<string, DictEntry[]> {
     const tab1 = line.indexOf("\t");
     const tab2 = line.indexOf("\t", tab1 + 1);
     if (tab1 === -1 || tab2 === -1) continue;
+    // Traditional is an optional 4th column, written only when it differs from
+    // the simplified headword (see scripts/build-dict.mjs). Older 3-column files
+    // (no tab3) still parse — `traditional` just stays undefined.
+    const tab3 = line.indexOf("\t", tab2 + 1);
     const hanzi = line.slice(0, tab1);
     const pinyin = line.slice(tab1 + 1, tab2);
-    const meaning = line.slice(tab2 + 1);
-    const entry = { hanzi, pinyin, meaning };
+    const meaning =
+      tab3 === -1 ? line.slice(tab2 + 1) : line.slice(tab2 + 1, tab3);
+    const entry: DictEntry = { hanzi, pinyin, meaning };
+    if (tab3 !== -1) entry.traditional = line.slice(tab3 + 1);
     const existing = map.get(hanzi);
     if (existing) existing.push(entry);
     else map.set(hanzi, [entry]);
@@ -98,17 +106,82 @@ const DROP_GLOSS =
 const DROP_PAREN =
   /\((Taiwan pr\.|Mainland pr\.|coll\. pr\.|also pr\.|also written)[^)]*\)/gi;
 
+// Tone-mark tables for converting CC-CEDICT's numbered pinyin ("nin2") into the
+// readable form ("nín"). Indexed by tone digit; tone 0/5 (neutral) keeps the
+// bare vowel.
+const TONE_VOWELS: Record<string, string[]> = {
+  a: ["a", "ā", "á", "ǎ", "à", "a"],
+  e: ["e", "ē", "é", "ě", "è", "e"],
+  i: ["i", "ī", "í", "ǐ", "ì", "i"],
+  o: ["o", "ō", "ó", "ǒ", "ò", "o"],
+  u: ["u", "ū", "ú", "ǔ", "ù", "u"],
+  ü: ["ü", "ǖ", "ǘ", "ǚ", "ǜ", "ü"],
+};
+
+/** Convert one numbered syllable ("shui3", "lu:4", "ma5") to tone marks. */
+function syllableToToneMarks(syl: string): string {
+  const m = syl.match(/^([a-zü:v]+?)([0-5])?$/i);
+  if (!m) return syl;
+  const base = m[1].replace(/u:/gi, "ü").replace(/v/gi, "ü");
+  const tone = m[2] ? Number(m[2]) : 0;
+  if (tone === 0 || tone === 5) return base; // neutral tone: no mark
+  const lower = base.toLowerCase();
+  // Standard placement: a or e wins; else the o in "ou"; else the last vowel.
+  let idx = lower.indexOf("a");
+  if (idx === -1) idx = lower.indexOf("e");
+  if (idx === -1 && lower.includes("ou")) idx = lower.indexOf("o");
+  if (idx === -1) {
+    for (let i = base.length - 1; i >= 0; i--) {
+      if ("aeiouü".includes(lower[i])) {
+        idx = i;
+        break;
+      }
+    }
+  }
+  const marked = idx === -1 ? undefined : TONE_VOWELS[lower[idx]]?.[tone];
+  if (idx === -1 || !marked) return base;
+  return base.slice(0, idx) + marked + base.slice(idx + 1);
+}
+
+/** Convert a space-separated numbered-pinyin string ("hui4 shui3") to tone marks. */
+export function numberedToToneMarks(pinyin: string): string {
+  return pinyin.split(/\s+/).filter(Boolean).map(syllableToToneMarks).join(" ");
+}
+
+// A CC-CEDICT cross-reference inside a gloss: an optional traditional form, the
+// (simplified) headword, then its reading in brackets — e.g. "您[nin2]" or
+// "會水|会水[hui4 shui3]". We swap the characters for their own pinyin so the
+// answer character (or a related one) can't leak into a recall card.
+const REF_RE = /[㐀-鿿]+(?:\|[㐀-鿿]+)?\[([^\]]*)\]/g;
+
 /**
- * Tidy one gloss: remove [pinyin] refs and pronunciation-variant notes, but
- * keep helpful parenthetical context. Returns "" for metadata-only glosses.
+ * Tidy one gloss for display on a card:
+ *  - turn character cross-references ("您[nin2]") into their pinyin ("nín"),
+ *  - drop classifier notes ("(CL:…)") and pronunciation-variant notes,
+ *  - drop pure cross-reference/metadata glosses ("variant of …", "surname …").
+ * Returns "" for glosses that are nothing but metadata.
  */
 function cleanGloss(raw: string): string {
-  // Strip CC-CEDICT pinyin references like "深[shen1]" → "深".
-  let s = raw.replace(/\[[^\]]*\]/g, "").trim();
+  // Replace "字[pinyin]" references with their tone-marked pinyin, so the tested
+  // character (and closely related characters) don't leak into its own meaning.
+  let s = raw.replace(REF_RE, (_m, py: string) => numberedToToneMarks(py));
+  // Remove any leftover bare [pinyin] refs not attached to a character.
+  s = s.replace(/\[[^\]]*\]/g, "");
+  // Drop a classifier note left inside parentheses, e.g. "cat (CL:隻|只)".
+  s = s.replace(/\(\s*CL:[^)]*\)/gi, " ");
+  // Drop the "(bound form)" grammar label — pure metadata for a meaning card,
+  // unlike register/selectional tags ("(slang)", "(of a person)") which we keep.
+  s = s.replace(/\(bound form[^)]*\)/gi, " ");
+  s = s.trim();
+  if (!s) return "";
   // Decide whether this gloss is a pure cross-reference, ignoring any leading
-  // register tags (so "(coll.) variant of …" is still dropped).
+  // register tags (so "(coll.) variant of …" is still dropped). A gloss that is
+  // ENTIRELY parenthetical — how CC-CEDICT writes particle meanings such as 了
+  // "(completed action marker)" or 吗 "(question particle…)" — has an empty core
+  // but is a real meaning, so it must be kept (dropping it used to hide the
+  // everyday reading entirely, leaving only a rare one).
   const core = s.replace(/^(\([^)]*\)\s*)+/, "").trim();
-  if (!core || DROP_GLOSS.test(core)) return "";
+  if (core && DROP_GLOSS.test(core)) return "";
   return s
     .replace(DROP_PAREN, " ") // drop pronunciation/spelling-variant notes
     .replace(/\(\s*\)/g, " ") // drop parens left empty after ref removal
@@ -165,6 +238,20 @@ function hasClassifier(meaning: string): boolean {
 }
 
 /**
+ * Curated default readings for a few grammatical particles. For these, the
+ * generated kmandarin table points at a rare "dictionary" reading (了→liǎo,
+ * 啦→lā) even though the character is overwhelmingly used as a neutral-tone
+ * particle (了 le, 啦 la). This pins them to the everyday reading and takes
+ * precedence over kmandarin. Kept deliberately tiny: characters with a strong
+ * standalone meaning (地, 得, 着, 的) are intentionally NOT here — their content
+ * reading is a fine default and the particle stays available in the dropdown.
+ */
+const PARTICLE_READINGS: Record<string, string> = {
+  了: "le",
+  啦: "la",
+};
+
+/**
  * Score one entry as a default reading; higher wins. Combines cheap signals
  * from the entry itself with an optional authoritative reading for the
  * character (`preferred`, from the bundled kmandarin table):
@@ -195,7 +282,10 @@ function rankEntries(
   head?: string,
   kmandarin?: Map<string, string>
 ): DictEntry[] {
-  const preferred = head ? kmandarin?.get(head) : undefined;
+  // A curated particle reading (if any) wins over the generated kmandarin table.
+  const preferred = head
+    ? PARTICLE_READINGS[head] ?? kmandarin?.get(head)
+    : undefined;
   return entries
     .map((e, i) => ({ e, i, s: scoreEntry(e, preferred) }))
     .filter((x) => x.s > -Infinity)
@@ -287,6 +377,8 @@ export interface CleanReading {
   senses: string[];
   /** A proper-noun / surname reading (capitalised pinyin). */
   proper: boolean;
+  /** Traditional form for this reading, when it differs from the simplified word. */
+  traditional?: string;
 }
 
 /** A single character with all of its readings. */
@@ -305,7 +397,13 @@ export interface WordDetail {
 }
 
 function cleanReading(e: DictEntry): CleanReading {
-  return { pinyin: e.pinyin, senses: cleanSenses(e.meaning), proper: !isCommon(e) };
+  const r: CleanReading = {
+    pinyin: e.pinyin,
+    senses: cleanSenses(e.meaning),
+    proper: !isCommon(e),
+  };
+  if (e.traditional) r.traditional = e.traditional;
+  return r;
 }
 
 /**

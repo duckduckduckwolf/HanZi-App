@@ -97,6 +97,9 @@ function ReadingBlock({ reading }: { reading: CleanReading }) {
       <span className="detail-reading-pinyin">
         {reading.pinyin}
         {reading.proper && <span className="detail-tag">proper noun</span>}
+        {reading.traditional && (
+          <span className="detail-trad">trad. {reading.traditional}</span>
+        )}
       </span>
       <span className="detail-reading-senses">{reading.senses.join("; ")}</span>
     </div>

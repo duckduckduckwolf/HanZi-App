@@ -7,6 +7,7 @@ import {
   cleanSenses,
   cleanMeaning,
   getWordDetail,
+  numberedToToneMarks,
 } from "../src/dict/cedict";
 
 const SAMPLE = [
@@ -204,5 +205,153 @@ describe("getWordDetail", () => {
     expect(detail.readings[0].senses).toContain("to learn");
     expect(detail.chars.map((c) => c.hanzi)).toEqual(["学", "习"]);
     expect(detail.chars[0].readings[0].senses).toContain("to study");
+  });
+});
+
+describe("traditional forms", () => {
+  // The optional 4th column carries the traditional headword, written only when
+  // it differs from the simplified form (see scripts/build-dict.mjs). So 面's
+  // "face" reading has none, but its "noodles" reading (麵) does.
+  const TRAD = [
+    "面\tmiàn\tface; surface; aspect", // traditional identical → no 4th column
+    "面\tmiàn\tflour; noodles\t麵", // traditional differs → 4th column
+    "学习\txué xí\tto learn; to study\t學習",
+    "学\txué\tto study\t學",
+    "习\txí\tto practise\t習",
+  ].join("\n");
+
+  it("parses the optional traditional column, leaving it unset when absent", () => {
+    const dict = parseCedict(TRAD);
+    const mian = dict.get("面")!;
+    expect(mian[0].traditional).toBeUndefined();
+    expect(mian[1].traditional).toBe("麵");
+  });
+
+  it("does not break older 3-column lines", () => {
+    const dict = parseCedict(SAMPLE);
+    expect(dict.get("你好")![0].traditional).toBeUndefined();
+  });
+
+  it("surfaces the traditional form per reading in the word detail", () => {
+    const readings = getWordDetail(parseCedict(TRAD), "面").readings;
+    expect(readings.find((r) => r.senses.includes("noodles"))?.traditional).toBe(
+      "麵"
+    );
+    // The same-traditional "face" reading exposes nothing.
+    expect(
+      readings.find((r) => r.senses.includes("face"))?.traditional
+    ).toBeUndefined();
+  });
+
+  it("shows the traditional form for a whole word and per character", () => {
+    const detail = getWordDetail(parseCedict(TRAD), "学习");
+    expect(detail.readings[0].traditional).toBe("學習");
+    expect(detail.chars[0].readings[0].traditional).toBe("學");
+    expect(detail.chars[1].readings[0].traditional).toBe("習");
+  });
+});
+
+describe("numberedToToneMarks", () => {
+  it("places tone marks using the standard rules", () => {
+    expect(numberedToToneMarks("nin2")).toBe("nín");
+    expect(numberedToToneMarks("hui4 shui3")).toBe("huì shuǐ");
+    expect(numberedToToneMarks("ma5")).toBe("ma"); // neutral tone: no mark
+    expect(numberedToToneMarks("lu:4")).toBe("lǜ"); // ü written as "u:"
+    expect(numberedToToneMarks("xiao3")).toBe("xiǎo"); // "a" takes the mark
+    expect(numberedToToneMarks("gou3")).toBe("gǒu"); // "o" in "ou" takes the mark
+  });
+});
+
+describe("character references become pinyin (no spoilers)", () => {
+  // The tested character (or a closely related one) used to leak into its own
+  // meaning. CC-CEDICT already annotates these references with pinyin, so we
+  // swap the characters for that pinyin instead of showing the character.
+  it("converts a single-character reference and drops the character", () => {
+    expect(
+      cleanSenses("you (informal, as opposed to courteous 您[nin2])")
+    ).toEqual(["you (informal, as opposed to courteous nín)"]);
+  });
+
+  it("converts a multi-syllable trad|simp reference", () => {
+    expect(
+      cleanSenses(
+        "to swim (used mostly in 會水|会水[hui4 shui3] and 水性[shui3 xing4])"
+      )
+    ).toEqual(["to swim (used mostly in huì shuǐ and shuǐ xìng)"]);
+  });
+});
+
+describe("grammar labels", () => {
+  // "(bound form)" is pure linguistic metadata; register tags like "(literary)"
+  // carry meaning and are kept.
+  it("drops the (bound form) label but keeps the meaning and other tags", () => {
+    expect(
+      cleanSenses("(bound form) to walk; (literary) trip; journey")
+    ).toEqual(["to walk", "(literary) trip", "journey"]);
+  });
+
+  it("drops a sense that is only the (bound form) label", () => {
+    expect(cleanSenses("to grow; (bound form)")).toEqual(["to grow"]);
+  });
+});
+
+describe("classifier in parentheses", () => {
+  // 猫's "cat (CL:隻|只[zhi1])" leaked the classifier into the meaning.
+  it("drops a (CL:…) note left inside a meaning", () => {
+    expect(
+      cleanSenses(
+        "cat (CL:隻|只[zhi1]); (dialect) to hide oneself; (loanword) (coll.) modem"
+      )
+    ).toEqual(["cat", "(dialect) to hide oneself", "(loanword) (coll.) modem"]);
+  });
+});
+
+// Particles whose meaning CC-CEDICT writes entirely inside parentheses used to
+// be discarded as metadata, so the everyday reading vanished from both the
+// default and the dropdown, leaving only a rare reading (了→liǎo, 吗→má).
+const PARTICLES = [
+  "了\tle\t(completed action marker); (modal particle indicating change of state, situation now); (modal particle intensifying preceding clause)",
+  "了\tliǎo\tto finish; (literary) completely (not); to understand clearly (variant of 瞭|了[liao3])",
+  '吗\tmá\t(coll.) what?',
+  "吗\tmǎ\tused in 嗎啡|吗啡[ma3 fei1]",
+  '吗\tma\t(question particle for "yes-no" questions)',
+  "啦\tlā\t(onom.) sound of singing; (dialect) to chat",
+  "啦\tla\tsentence-final particle; particle placed after each item in a list",
+].join("\n");
+
+describe("particles (wholly-parenthetical meanings)", () => {
+  it("keeps a wholly-parenthetical meaning instead of dropping it", () => {
+    expect(cleanSenses("(completed action marker); (modal particle)")).toEqual([
+      "(completed action marker)",
+      "(modal particle)",
+    ]);
+  });
+
+  it("defaults 吗 to the question particle ma (not the rare má)", () => {
+    const dict = parseCedict(PARTICLES);
+    const r = lookupWord(dict, "吗");
+    expect(r?.pinyin).toBe("ma");
+    expect(r?.meaning).toContain("question particle");
+  });
+
+  it("defaults 了 to le, overriding even a liǎo preferred reading", () => {
+    const dict = parseCedict(PARTICLES);
+    expect(lookupWord(dict, "了")?.pinyin).toBe("le");
+    // The generated kmandarin table actually lists 了→liǎo; the override wins.
+    const km = new Map([["了", "liǎo"]]);
+    expect(lookupWord(dict, "了", km)?.pinyin).toBe("le");
+  });
+
+  it("defaults 啦 to the particle la, overriding lā", () => {
+    const dict = parseCedict(PARTICLES);
+    const km = new Map([["啦", "lā"]]);
+    expect(lookupWord(dict, "啦", km)?.pinyin).toBe("la");
+  });
+
+  it("still offers both readings of 了, le first", () => {
+    const dict = parseCedict(PARTICLES);
+    const alts = alternativeEntries(dict, "了");
+    expect(alts[0].pinyin).toBe("le");
+    expect(alts.map((a) => a.pinyin)).toContain("liǎo");
   });
 });

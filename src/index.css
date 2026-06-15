@@ -237,6 +237,77 @@ textarea {
   padding: 6px 10px;
 }
 
+/* Sort control above a deck's word list. */
+.list-sort {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.list-sort-label {
+  font-size: 13px;
+  color: #8a857c;
+}
+
+.sort-btn {
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #d9d6cf;
+  background: #fff;
+  color: #8a857c;
+}
+
+.sort-btn.on {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+/* Review-status badge shown on each word row. The base is the muted grey used
+   for words due more than a month out (kind "far"); the modifiers tint by how
+   soon the word is due. */
+.word-status {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f3f1ec;
+  color: #8a857c;
+  white-space: nowrap;
+}
+
+/* New (not yet studied) — blue. */
+.word-status-new {
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+/* Due now / overdue — red. */
+.word-status-due {
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+/* Due within a week — orange. */
+.word-status-week {
+  background: #ffedd5;
+  color: #c2410c;
+  font-weight: 600;
+}
+
+/* Due within a month — yellow. */
+.word-status-month {
+  background: #fef9c3;
+  color: #a16207;
+  font-weight: 600;
+}
+
 button {
   font: inherit;
   font-size: 17px;
@@ -331,33 +402,40 @@ button.primary {
   inset: 0;
 }
 
-/* Directional spring "bounce" when a correct stroke lands: it shoots in from
- * wherever the user drew (--pop-dx / --pop-dy, set per-stroke in JS), overshoots
- * the target and springs back a couple of times, settling into place — the same
- * bouncy feel as before, but now travelling along the direction of the slide.
- * Scale squashes/stretches alongside for extra pop. No opacity fade (a fade is
- * what made it feel like it was sliding in limply rather than bouncing). */
+/* Directional "slide + bounce" when a correct stroke lands: it appears where the
+ * user drew it (offset by --pop-dx / --pop-dy, set per-stroke in JS), slides into
+ * place, then bounces. The slide is the main move — brisk and fairly direct —
+ * with just a hint of magnet pull: a gentle acceleration into the target rather
+ * than a limp ease-out drift, so it arrives with momentum and overshoots into a
+ * satisfying little spring before settling. Scale squashes on impact and
+ * stretches on the rebound for extra pop. Per-keyframe animation-timing-function
+ * lets the slide and the bounce use different curves. Kept short on purpose. */
 @keyframes hw-stroke-pop {
   0% {
-    transform: translate(var(--pop-dx, 0), var(--pop-dy, 0)) scale(1.09);
+    transform: translate(var(--pop-dx, 0), var(--pop-dy, 0)) scale(1.04);
+    /* The slide: moves in briskly, accelerating a touch (the magnet hint). */
+    animation-timing-function: cubic-bezier(0.3, 0.1, 0.5, 0.5);
   }
-  50% {
-    /* Shoot just past the target (opposite side) and squash slightly. */
+  47% {
+    /* Arrive with momentum, overshoot past the target and squash — the impact. */
     transform: translate(
-        calc(var(--pop-dx, 0) * -0.09),
-        calc(var(--pop-dy, 0) * -0.09)
+        calc(var(--pop-dx, 0) * -0.10),
+        calc(var(--pop-dy, 0) * -0.10)
       )
-      scale(0.97);
+      scale(0.96);
+    animation-timing-function: ease-out;
   }
-  72% {
-    /* Bounce back toward the drawn side, stretch slightly. */
+  69% {
+    /* Spring back toward the drawn side and stretch — the satisfying rebound. */
     transform: translate(
         calc(var(--pop-dx, 0) * 0.04),
         calc(var(--pop-dy, 0) * 0.04)
       )
       scale(1.03);
+    animation-timing-function: ease-in-out;
   }
-  88% {
+  86% {
+    /* One last small wobble before it settles. */
     transform: translate(
         calc(var(--pop-dx, 0) * -0.015),
         calc(var(--pop-dy, 0) * -0.015)
@@ -370,7 +448,7 @@ button.primary {
 }
 
 .hw-stroke-pop {
-  animation: hw-stroke-pop 420ms ease-out;
+  animation: hw-stroke-pop 400ms;
 }
 
 .drawing-overlay {
@@ -745,6 +823,15 @@ button.primary {
   padding: 1px 8px;
 }
 
+/* Traditional form shown beside a reading's pinyin (only when it differs). */
+.detail-trad {
+  font-size: 14px;
+  color: #4b4740;
+  background: #ece9e2;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
 .detail-reading-senses {
   font-size: 15px;
   line-height: 1.45;
@@ -767,4 +854,209 @@ button.primary {
 .detail-char-readings {
   flex: 1;
   min-width: 0;
+}
+
+/* ---- Decks ---- */
+
+.new-deck-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.new-deck-input {
+  flex: 1;
+  font: inherit;
+  font-size: 16px;
+  padding: 10px 12px;
+  border: 1px solid #c9c5bc;
+  border-radius: 10px;
+}
+
+.deck-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deck-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e2dfd8;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.deck-row.editing {
+  flex-wrap: wrap;
+}
+
+.deck-main {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.deck-main:active {
+  background: transparent;
+}
+
+.deck-name {
+  font-size: 18px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deck-count {
+  font-size: 14px;
+  color: #8a857c;
+  flex-shrink: 0;
+}
+
+.deck-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.deck-actions button {
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
+/* Per-deck word list header (back button + title). */
+.deck-words-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.deck-words-header h2 {
+  margin: 0;
+}
+
+.back-link {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-size: 16px;
+  padding: 6px 8px 6px 0;
+}
+
+.back-link:active {
+  background: transparent;
+}
+
+/* Multi-select move bar above the word list. */
+.select-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 15px;
+  color: #1e3a8a;
+}
+
+.select-toolbar select {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.select-toolbar button {
+  font-size: 14px;
+  padding: 6px 10px;
+  margin-left: auto;
+}
+
+.word-select {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.word-move {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 6px;
+  border: 1px solid #d9d6cf;
+  border-radius: 8px;
+  background: #faf9f6;
+  color: #6b6660;
+  max-width: 110px;
+}
+
+/* Bulk "add all to deck" control on the Add screen. */
+.bulk-deck-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e2dfd8;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-top: 6px;
+  font-size: 15px;
+}
+
+.bulk-deck-row select {
+  font: inherit;
+  font-size: 15px;
+  padding: 8px 10px;
+  border: 1px solid #d9d6cf;
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* Per-deck study toggles on the Today screen. */
+.deck-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.deck-chip {
+  font-size: 14px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid #d9d6cf;
+  background: #fff;
+  color: #8a857c;
+}
+
+.deck-chip.on {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 600;
 }

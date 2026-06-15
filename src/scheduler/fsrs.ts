@@ -8,7 +8,7 @@ import {
   type Grade,
   type Steps,
 } from "ts-fsrs";
-import type { FsrsState } from "../db/db";
+import type { FsrsState, Card } from "../db/db";
 import type { Settings } from "./settings";
 import type { CharResult } from "../types";
 
@@ -140,4 +140,30 @@ export function formatInterval(fromMs: number, toMs: number): string {
   if (months < 12) return `${Math.round(months)}mo`;
   const years = days / 365;
   return `${years.toFixed(years < 10 ? 1 : 0)}y`;
+}
+
+/**
+ * Visual category for a card's review-status badge, by urgency:
+ * `new` (blue, not studied yet), `due` (red, ready/overdue), `week` (orange,
+ * due within a week), `month` (yellow, due within a month), `far` (muted grey,
+ * due further out).
+ */
+export type DueKind = "new" | "due" | "week" | "month" | "far";
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * A short review-status label for a card ("New", "Due now", or "Due in 3d") plus
+ * an urgency `kind` for colouring the badge. Pure; `now` is injected so it's
+ * testable and respects the dev time-travel clock.
+ */
+export function dueStatus(card: Card, now: number): { label: string; kind: DueKind } {
+  if (!card.introduced) return { label: "New", kind: "new" };
+  if (card.due <= now) return { label: "Due now", kind: "due" };
+  const wait = card.due - now;
+  const label = `Due in ${formatInterval(now, card.due)}`;
+  if (wait <= WEEK_MS) return { label, kind: "week" };
+  if (wait <= MONTH_MS) return { label, kind: "month" };
+  return { label, kind: "far" };
 }
