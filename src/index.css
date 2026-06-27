@@ -346,15 +346,16 @@ button.primary {
   min-height: 64px;
 }
 
-.prompt-meaning {
-  font-size: 24px;
+.prompt-pinyin {
+  font-size: 27px;
   font-weight: 600;
+  color: #1a1a1a;
 }
 
-.prompt-pinyin {
-  font-size: 19px;
+.prompt-meaning {
+  font-size: 16px;
   color: #6b675f;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .char-progress {
@@ -731,6 +732,11 @@ button.primary {
 .modal-backdrop {
   position: fixed;
   inset: 0;
+  /* Use the dynamic viewport height so a bottom sheet anchors to the
+     *visible* bottom on mobile — otherwise Safari's toolbar / home bar
+     hides the lower part of the sheet. Falls back to vh where unsupported. */
+  height: 100vh;
+  height: 100dvh;
   z-index: 50;
   display: flex;
   align-items: flex-end;
@@ -743,6 +749,7 @@ button.primary {
   width: 100%;
   max-width: 520px;
   max-height: 85vh;
+  max-height: 85dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   background: #f7f6f3;

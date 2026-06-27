@@ -100,11 +100,11 @@ export default function ReviewSession({ settings, includeDeckIds, onExit }: Prop
       </div>
 
       <div className="prompt">
-        <div className="prompt-meaning" data-testid="prompt-meaning">
-          {item.card.meaning}
-        </div>
         <div className="prompt-pinyin" data-testid="prompt-pinyin">
           {item.card.pinyin}
+        </div>
+        <div className="prompt-meaning" data-testid="prompt-meaning">
+          {item.card.meaning}
         </div>
       </div>
 
