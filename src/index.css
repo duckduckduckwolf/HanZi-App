@@ -698,7 +698,7 @@ button.primary {
   line-height: 1.2;
 }
 
-/* ---- Word detail sheet ---- */
+/* ---- Word detail screen ---- */
 
 /* Tappable word row in the list (opens the detail sheet). */
 .word-main {
@@ -729,43 +729,11 @@ button.primary {
   border-color: #c7d2fe;
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  /* Use the dynamic viewport height so a bottom sheet anchors to the
-     *visible* bottom on mobile — otherwise Safari's toolbar / home bar
-     hides the lower part of the sheet. Falls back to vh where unsupported. */
-  height: 100vh;
-  height: 100dvh;
-  z-index: 50;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.modal-card {
-  position: relative;
-  width: 100%;
-  max-width: 520px;
-  max-height: 85vh;
-  max-height: 85dvh;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  background: #f7f6f3;
-  border-radius: 18px 18px 0 0;
-  padding: 22px 18px calc(24px + env(safe-area-inset-bottom));
-}
-
-.modal-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  border: none;
-  background: transparent;
-  color: #6b675f;
-  font-size: 18px;
-  padding: 6px 10px;
+/* The detail view is a normal in-flow screen (scrolls with .app-main), not a
+   fixed overlay — iOS Safari doesn't reliably touch-scroll overlay content,
+   which made the old bottom sheet feel "cut off" and unscrollable on iPhone. */
+.detail-screen .detail-hanzi {
+  margin-top: 8px;
 }
 
 .detail-hanzi {

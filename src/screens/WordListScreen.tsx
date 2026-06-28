@@ -11,7 +11,7 @@ import {
 import { dueStatus } from "../scheduler/fsrs";
 import { now } from "../devClock";
 import type { Card, Deck } from "../db/db";
-import WordDetailModal from "./WordDetailModal";
+import WordDetailView from "./WordDetailView";
 
 interface Props {
   deckId: number;
@@ -46,6 +46,17 @@ export default function WordListScreen({ deckId, deckName, decks, onBack }: Prop
     await moveCards([...selected], target);
     setSelected(new Set());
   };
+
+  // Full-screen word detail (scrolls natively); Back returns to the list.
+  if (detailCard) {
+    return (
+      <WordDetailView
+        hanzi={detailCard.hanzi}
+        card={detailCard}
+        onBack={() => setDetailCard(null)}
+      />
+    );
+  }
 
   return (
     <div className="screen list-screen">
@@ -176,14 +187,6 @@ export default function WordListScreen({ deckId, deckName, decks, onBack }: Prop
             })}
           </ul>
         </>
-      )}
-
-      {detailCard && (
-        <WordDetailModal
-          hanzi={detailCard.hanzi}
-          card={detailCard}
-          onClose={() => setDetailCard(null)}
-        />
       )}
     </div>
   );

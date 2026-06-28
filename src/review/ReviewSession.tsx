@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Grade } from "ts-fsrs";
 import CharacterQuiz from "../quiz/CharacterQuiz";
 import GradeBar from "./GradeBar";
-import WordDetailModal from "../screens/WordDetailModal";
+import WordDetailView from "../screens/WordDetailView";
 import { db } from "../db/db";
 import { buildQueue, gradeCard, type QueueItem } from "../scheduler/queue";
 import type { Settings } from "../scheduler/settings";
@@ -92,6 +92,17 @@ export default function ReviewSession({ settings, includeDeckIds, onExit }: Prop
     setCardNow(now());
   };
 
+  // Full-screen word detail (scrolls natively); Back returns to grading.
+  if (showDetail) {
+    return (
+      <WordDetailView
+        hanzi={item.card.hanzi}
+        card={item.card}
+        onBack={() => setShowDetail(false)}
+      />
+    );
+  }
+
   return (
     <div className="screen review-session">
       <div className="session-progress" data-testid="session-progress">
@@ -153,14 +164,6 @@ export default function ReviewSession({ settings, includeDeckIds, onExit }: Prop
       <button className="exit-link" onClick={onExit} data-testid="session-quit">
         End session
       </button>
-
-      {showDetail && (
-        <WordDetailModal
-          hanzi={item.card.hanzi}
-          card={item.card}
-          onClose={() => setShowDetail(false)}
-        />
-      )}
     </div>
   );
 }

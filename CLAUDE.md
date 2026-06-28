@@ -81,7 +81,7 @@ src/
     AddWordsScreen.tsx     paste -> lookup -> edit (pick reading + deck) -> save
     DecksScreen.tsx        deck list (counts, create/rename/delete) -> open a deck
     WordListScreen.tsx     one deck's words: sort (added/due) + status badge, inline edit, delete, move (single/multi), detail
-    WordDetailModal.tsx    bottom-sheet: card info + full cleaned dictionary entry
+    WordDetailView.tsx     full in-flow screen (scrolls with .app-main): card info + full cleaned dictionary entry
     SettingsScreen.tsx     FSRS settings + backup export/import
 tests/                     Vitest specs (cedict, cards, decks, scheduler, backup)
 scripts/build-dict.mjs     one-off: CC-CEDICT download -> public/cedict.tsv
